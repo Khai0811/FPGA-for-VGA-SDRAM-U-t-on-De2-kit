@@ -26,56 +26,63 @@ module DE2_VGA_TOP (
     wire rst;
     assign rst = ~KEY[0];
 
-	 reg clk25;
-
-
     // ========================
-    // VGA Controller
+    // Internal signals
     // ========================
     wire video_on;
     wire [9:0] x, y;
 
+    wire [4:0] r;
+    wire [5:0] g;
+    wire [4:0] b;
+
+    // FIFO giáº£ láº­p (test)
+    wire [15:0] fifo_top;
+    assign fifo_top = {x[9:2], y[9:2]};  // fake data
+
+    // ========================
+    // VGA Controller
+    // ========================
     vga_controller vga (
-        .clk_in(CLOCK_50),   // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ FIX: dÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹ng clock 25MHz
+        .clk_in(CLOCK_50),
         .rst(rst),
         .hsync(VGA_HS),
         .vsync(VGA_VS),
         .video_on(video_on),
         .x(x),
         .y(y),
-		  .clk25(VGA_CLK)
+        .clk25(VGA_CLK)
     );
 
     // ========================
-    // RGB logic (10-bit)
+    // DATA 565 â†’ RGB
     // ========================
-    reg [9:0] r, g, b;
-
-    always @(*) begin
-        if (video_on) begin
-            // mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂºÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·c ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¹Ã…â€œÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â»ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¹nh = 0
-            r = 10'd0;
-            g = 10'd0;
-            b = 10'd0;
-
-            // SW control
-            if (SW[0]) r = 10'h3FF; // max ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¹Ã…â€œÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â»ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â
-            if (SW[1]) g = 10'h3FF; // max xanh lÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡
-            if (SW[2]) b = 10'h3FF; // max xanh dÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ng
-        end else begin
-            r = 0;
-            g = 0;
-            b = 0;
-        end
-    end
+    vga_data565 data (
+        .fifo_top(fifo_top),
+        .r(r),
+        .g(g),
+        .b(b)
+    );
 
     // ========================
-    // Output
+    // Mask theo SW + video_on
     // ========================
-    assign VGA_R = r;
-    assign VGA_G = g;
-    assign VGA_B = b;
-    assign VGA_BLANK = SW[3];
+    wire [4:0] r_out;
+    wire [5:0] g_out;
+    wire [4:0] b_out;
+
+    assign r_out = (video_on && SW[0]) ? r : 5'b0;
+    assign g_out = (video_on && SW[1]) ? g : 6'b0;
+    assign b_out = (video_on && SW[2]) ? b : 5'b0;
+
+    // ========================
+    // Output VGA (10-bit DAC)
+    // ========================
+    assign VGA_R = {r_out, 5'b0};
+    assign VGA_G = {g_out, 4'b0};
+    assign VGA_B = {b_out, 5'b0};
+
+    assign VGA_BLANK = 1'b1;  // luÃ´n báº­t
     assign VGA_SYNC  = 1'b0;
 
 endmodule
