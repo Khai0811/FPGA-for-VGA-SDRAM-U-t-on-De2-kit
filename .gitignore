@@ -1,4 +1,7 @@
-Do_An.*  
-!*.v      
-!*.md    
-!*.txt
+db/
+incremental_db/
+output_files/
+*.v.bak
+*.md
+Do_An.*
+*.v.bak
