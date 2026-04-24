@@ -1,0 +1,177 @@
+`timescale 1ns/1ps
+/*
+ * de2_dm9000_top.v
+ *
+ * Top-level loadable Verilog design for the DE2 board.
+ *
+ * This design:
+ *   - drives the DM9000A Ethernet chip
+ *   - initializes the chip
+ *   - shows status on LEDs
+ *   - periodically pushes a simple 32-byte test stream into TX path
+ *
+ * IMPORTANT:
+ * The TX stream below is only a hardware test pattern source.
+ * To talk to a PC meaningfully, replace that test stream with:
+ *   - a valid raw Ethernet frame generator in HDL, or
+ *   - connect dm9000_core to a CPU / protocol block.
+ */
+
+module de2_dm9000_top (
+    input  wire        CLOCK_50,
+    input  wire [3:0]  KEY,
+    output wire [8:0]  LEDG,
+
+    inout  wire [15:0] ENET_DATA,
+    output wire        ENET_CLK,
+    output wire        ENET_CMD,
+    output wire        ENET_CS_N,
+    input  wire        ENET_INT,
+    output wire        ENET_RD_N,
+    output wire        ENET_RST_N,
+    output wire        ENET_WR_N
+);
+
+    wire clk   = CLOCK_50;
+    wire rst_n = KEY[0];
+
+    // 25 MHz clock for DM9000A from 50 MHz board clock.
+    reg enet_clk_div;
+    always @(posedge CLOCK_50 or negedge rst_n) begin
+        if (!rst_n)
+            enet_clk_div <= 1'b0;
+        else
+            enet_clk_div <= ~enet_clk_div;
+    end
+    assign ENET_CLK = enet_clk_div;
+
+    wire        bus_req_valid;
+    wire        bus_req_ready;
+    wire [1:0]  bus_req_cmd;
+    wire [7:0]  bus_req_reg_addr;
+    wire [15:0] bus_req_wdata;
+    wire [15:0] bus_rsp_rdata;
+    wire        bus_rsp_valid;
+
+    wire        init_done;
+    wire        link_ok;
+    wire [15:0] chip_vid;
+    wire [15:0] chip_pid;
+
+    reg         tx_start;
+    wire        tx_busy;
+    wire        tx_done;
+    reg  [15:0] tx_data;
+    reg         tx_data_valid;
+    wire        tx_data_ready;
+
+    reg         rx_pop;
+    wire [15:0] rx_data;
+    wire        rx_data_valid;
+    wire [15:0] rx_length_bytes;
+    wire        rx_frame_ready;
+
+    // Test stream source
+    localparam TEST_FRAME_BYTES = 16'd32;
+    reg [7:0]  test_count;
+    reg [31:0] send_timer;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            tx_start      <= 1'b0;
+            tx_data       <= 16'd0;
+            tx_data_valid <= 1'b0;
+            test_count    <= 8'd0;
+            send_timer    <= 32'd0;
+        end else begin
+            tx_start <= 1'b0;
+
+            if (!init_done) begin
+                tx_data_valid <= 1'b0;
+                test_count    <= 8'd0;
+                send_timer    <= 32'd0;
+            end else begin
+                if (!tx_busy && send_timer == 32'd50_000_00) begin
+                    tx_start   <= 1'b1;
+                    test_count <= 8'd0;
+                    send_timer <= 32'd0;
+                end else begin
+                    send_timer <= send_timer + 32'd1;
+                end
+
+                if (tx_busy && tx_data_ready && test_count < TEST_FRAME_BYTES[7:0]) begin
+                    tx_data       <= {test_count, test_count + 8'd1};
+                    tx_data_valid <= 1'b1;
+                    test_count    <= test_count + 8'd2;
+                end else begin
+                    tx_data_valid <= 1'b0;
+                end
+            end
+        end
+    end
+
+    // Auto-drain RX data in starter design
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            rx_pop <= 1'b0;
+        else
+            rx_pop <= rx_frame_ready;
+    end
+
+    dm9000_bus_if u_bus (
+        .clk          (clk),
+        .rst_n        (rst_n),
+        .req_valid    (bus_req_valid),
+        .req_ready    (bus_req_ready),
+        .req_cmd      (bus_req_cmd),
+        .req_reg_addr (bus_req_reg_addr),
+        .req_wdata    (bus_req_wdata),
+        .rsp_rdata    (bus_rsp_rdata),
+        .rsp_valid    (bus_rsp_valid),
+        .ENET_DATA    (ENET_DATA),
+        .ENET_CMD     (ENET_CMD),
+        .ENET_CS_N    (ENET_CS_N),
+        .ENET_RD_N    (ENET_RD_N),
+        .ENET_WR_N    (ENET_WR_N),
+        .ENET_RST_N   (ENET_RST_N),
+        .ENET_INT     (ENET_INT)
+    );
+
+    dm9000_core u_core (
+        .clk            (clk),
+        .rst_n          (rst_n),
+        .tx_start       (tx_start),
+        .tx_length_bytes(TEST_FRAME_BYTES),
+        .tx_data        (tx_data),
+        .tx_data_valid  (tx_data_valid),
+        .tx_data_ready  (tx_data_ready),
+        .tx_busy        (tx_busy),
+        .tx_done        (tx_done),
+        .rx_pop         (rx_pop),
+        .rx_data        (rx_data),
+        .rx_data_valid  (rx_data_valid),
+        .rx_length_bytes(rx_length_bytes),
+        .rx_frame_ready (rx_frame_ready),
+        .init_done      (init_done),
+        .link_ok        (link_ok),
+        .chip_vid       (chip_vid),
+        .chip_pid       (chip_pid),
+        .bus_req_valid  (bus_req_valid),
+        .bus_req_ready  (bus_req_ready),
+        .bus_req_cmd    (bus_req_cmd),
+        .bus_req_reg_addr(bus_req_reg_addr),
+        .bus_req_wdata  (bus_req_wdata),
+        .bus_rsp_rdata  (bus_rsp_rdata),
+        .bus_rsp_valid  (bus_rsp_valid),
+        .enet_int       (ENET_INT)
+    );
+
+    // LED mapping
+    assign LEDG[0]   = init_done;
+    assign LEDG[1]   = link_ok;
+    assign LEDG[2]   = tx_busy;
+    assign LEDG[3]   = tx_done;
+    assign LEDG[4]   = rx_frame_ready;
+    assign LEDG[8:5] = chip_vid[15:12];
+
+endmodule

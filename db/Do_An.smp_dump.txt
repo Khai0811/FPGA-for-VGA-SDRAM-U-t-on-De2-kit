@@ -1,0 +1,78 @@
+
+State Machine - |de2_dm9000_top|sdram:u_sdram|state_q
+Name state_q.STATE_REFRESH state_q.STATE_PRECHARGE state_q.STATE_WRITE1 state_q.STATE_WRITE0 state_q.STATE_READ_WAIT state_q.STATE_READ state_q.STATE_ACTIVATE state_q.STATE_IDLE state_q.STATE_DELAY state_q.STATE_INIT 
+state_q.STATE_INIT 0 0 0 0 0 0 0 0 0 0 
+state_q.STATE_DELAY 0 0 0 0 0 0 0 0 1 1 
+state_q.STATE_IDLE 0 0 0 0 0 0 0 1 0 1 
+state_q.STATE_ACTIVATE 0 0 0 0 0 0 1 0 0 1 
+state_q.STATE_READ 0 0 0 0 0 1 0 0 0 1 
+state_q.STATE_READ_WAIT 0 0 0 0 1 0 0 0 0 1 
+state_q.STATE_WRITE0 0 0 0 1 0 0 0 0 0 1 
+state_q.STATE_WRITE1 0 0 1 0 0 0 0 0 0 1 
+state_q.STATE_PRECHARGE 0 1 0 0 0 0 0 0 0 1 
+state_q.STATE_REFRESH 1 0 0 0 0 0 0 0 0 1 
+
+State Machine - |de2_dm9000_top|sdram:u_sdram|delay_state_q
+Name delay_state_q.STATE_REFRESH delay_state_q.STATE_PRECHARGE delay_state_q.STATE_WRITE1 delay_state_q.STATE_WRITE0 delay_state_q.STATE_READ_WAIT delay_state_q.STATE_READ delay_state_q.STATE_ACTIVATE delay_state_q.STATE_INIT delay_state_q.STATE_DELAY delay_state_q.STATE_IDLE 
+delay_state_q.STATE_IDLE 0 0 0 0 0 0 0 0 0 0 
+delay_state_q.STATE_DELAY 0 0 0 0 0 0 0 0 1 1 
+delay_state_q.STATE_INIT 0 0 0 0 0 0 0 1 0 1 
+delay_state_q.STATE_ACTIVATE 0 0 0 0 0 0 1 0 0 1 
+delay_state_q.STATE_READ 0 0 0 0 0 1 0 0 0 1 
+delay_state_q.STATE_READ_WAIT 0 0 0 0 1 0 0 0 0 1 
+delay_state_q.STATE_WRITE0 0 0 0 1 0 0 0 0 0 1 
+delay_state_q.STATE_WRITE1 0 0 1 0 0 0 0 0 0 1 
+delay_state_q.STATE_PRECHARGE 0 1 0 0 0 0 0 0 0 1 
+delay_state_q.STATE_REFRESH 1 0 0 0 0 0 0 0 0 1 
+
+State Machine - |de2_dm9000_top|sdram:u_sdram|target_state_q
+Name target_state_q.STATE_WRITE0 target_state_q.STATE_READ target_state_q.STATE_IDLE target_state_q.STATE_REFRESH 
+target_state_q.STATE_IDLE 0 0 0 0 
+target_state_q.STATE_READ 0 1 1 0 
+target_state_q.STATE_WRITE0 1 0 1 0 
+target_state_q.STATE_REFRESH 0 0 1 1 
+
+State Machine - |de2_dm9000_top|eth_to_sdram_bridge:u_bridge|state
+Name state.S_WB_WRITE state.S_FETCH_PX1 state.S_FETCH_PX0 state.S_HDR_CRC_LO state.S_HDR_CRC_HI state.S_HDR_MAGIC state.S_IDLE 
+state.S_IDLE 0 0 0 0 0 0 0 
+state.S_HDR_MAGIC 0 0 0 0 0 1 1 
+state.S_HDR_CRC_HI 0 0 0 0 1 0 1 
+state.S_HDR_CRC_LO 0 0 0 1 0 0 1 
+state.S_FETCH_PX0 0 0 1 0 0 0 1 
+state.S_FETCH_PX1 0 1 0 0 0 0 1 
+state.S_WB_WRITE 1 0 0 0 0 0 1 
+
+State Machine - |de2_dm9000_top|dm9000_core:u_core|state
+Name state.S_CLR_ISR state.S_RX_DATA state.S_RX_LENGTH state.S_RX_STATUS state.S_TX_WAIT state.S_TX_KICK state.S_TX_PUSH state.S_TX_LEN_HI state.S_TX_LEN_LO state.S_POLL_NSR state.S_IDLE state.S_WR_IMR state.S_WR_RCR state.S_WR_NCR state.S_WR_GPR state.S_WR_GPCR state.S_RD_PIDH state.S_RD_PIDL state.S_RD_VIDH state.S_BOOT 
+state.S_BOOT 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+state.S_RD_VIDH 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 
+state.S_RD_PIDL 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 
+state.S_RD_PIDH 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 1 
+state.S_WR_GPCR 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 1 
+state.S_WR_GPR 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 1 
+state.S_WR_NCR 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 
+state.S_WR_RCR 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 1 
+state.S_WR_IMR 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 1 
+state.S_IDLE 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 1 
+state.S_POLL_NSR 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 1 
+state.S_TX_LEN_LO 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 1 
+state.S_TX_LEN_HI 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 
+state.S_TX_PUSH 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1 
+state.S_TX_KICK 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 1 
+state.S_TX_WAIT 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 
+state.S_RX_STATUS 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 
+state.S_RX_LENGTH 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 
+state.S_RX_DATA 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 
+state.S_CLR_ISR 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 
+
+State Machine - |de2_dm9000_top|dm9000_bus_if:u_bus|state
+Name state.S_DATA_READ state.S_DATA_WRITE state.S_DATA_SETUP state.S_IDX_PULSE state.S_IDX_SETUP state.S_IDLE state.S_RESET_REL state.S_RESET_HOLD state.S_DONE 
+state.S_RESET_HOLD 0 0 0 0 0 0 0 0 0 
+state.S_RESET_REL 0 0 0 0 0 0 1 1 0 
+state.S_IDLE 0 0 0 0 0 1 0 1 0 
+state.S_IDX_SETUP 0 0 0 0 1 0 0 1 0 
+state.S_IDX_PULSE 0 0 0 1 0 0 0 1 0 
+state.S_DATA_SETUP 0 0 1 0 0 0 0 1 0 
+state.S_DATA_WRITE 0 1 0 0 0 0 0 1 0 
+state.S_DATA_READ 1 0 0 0 0 0 0 1 0 
+state.S_DONE 0 0 0 0 0 0 0 1 1 

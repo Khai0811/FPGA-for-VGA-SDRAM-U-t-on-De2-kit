@@ -1,0 +1,74 @@
+1. Architecture of Ethernet Frame
+  +----------+-----+----------+----------+-----------+------------------+-----+
+  | Preamble | SFD | Dest MAC | Src MAC  | EtherType |     Payload      | FCS |
+  | 7 bytes  | 1 B | 6 bytes  | 6 bytes  |  2 bytes  |  46-1500 bytes   | 4 B |
+  +----------+-----+----------+----------+-----------+------------------+-----+
+
+- Vì ảnh 640x480x2 = 614,406 (Thêm  6 bytes: magic(2) + crc32(4)) bytes > 1500 bytes nên sẽ bị chia nhỏ thành 412 frames (61400/1460)
+bỏ 20B IP Header và 20B TCP Header
+
+2. Lệnh chạy file py
+python rgb565_sender.py --host 192.168.1.166 "C:\Users\KIET\Pictures\OIP.jpg"
+Trong đó 
+- 192.168.1.166 là IP của board DE2 (Set cố định trong code HDL verilog)
+- test.jpg là ảnh cần gửi 
+
+3. Ethernet trên DE2 kit
+- Trên DE2 kit dùng chip DM9000A để giao tiếp với Ethernet
+- DM9000A có 2 port: INDEX port và DATA port
+- Các chân kết nối FPGA ↔ DM9000A:
+  + ENET_DATA[15:0]  : 16-bit data bus
+  + ENET_CMD         : 0 = INDEX port (ghi địa chỉ register), 1 = DATA port (đọc/ghi dữ liệu)
+  + ENET_CS_N        : Chip Select (Active low)
+  + ENET_RD_N        : Read enable
+  + ENET_WR_N        : Write enable
+  + ENET_RST_N       : Reset chip (active-low)
+  + ENET_INT         : Interrupt from chip
+  + ENET_CLK         : Clock 25MHz
+
+4. Các register quan trọng trong DM9000Ag
+NCR	   0x00	      Network Control (reset, loopback)
+NSR	   0x01	      Network Status (link, TX complete)
+TCR	   0x02	      TX Control (kick gửi)
+RCR	   0x05	      RX Control (bật nhận, filter)
+GPCR	   0x1E	      GPIO Control
+GPR	   0x1F	      GPIO (bật/tắt PHY)
+TRPAL/H	0x22-0x23	TX packet length
+VIDL/H	0x28-0x29	Vendor ID = 0x0A46
+PIDL/H	0x2A-0x2B	Product ID = 0x9000
+ISR	   0xFE	      Interrupt Status
+IMR	   0xFF	      Interrupt Mask
+
+5. Khởi tạo chip DM9000A (file dm9000_core.v)
+- Reset chip (giu ENET_RST_N = 0 trong 1ms)
+- Doc VIDL/VIDH --> xac nhan Vendor ID = 0x0A46
+- Doc PIDL/PIDH --> xac nhan Product ID = 0x9000
+- Ghi GPCR = 0x01  --> bat GPIO output
+- Ghi GPR  = 0x00  --> bat PHY (bo thu phat vat ly)
+- Ghi NCR  = 0x00  --> che do binh thuong
+- Ghi RCR  = 0x39  --> bat RX, nhan tat ca goi (promiscuous)
+- Ghi IMR  = 0x83  --> bat interrupt cho RX va TX
+   --> init_done = 1, LED0 sang
+6. Luồng gửi và nhận trên kit 
+TX :
+  1. Ghi chieu dai goi vao TRPAL/TRPAH
+  2. Ghi data tung word 16-bit vao DATA port
+  3. Ghi TCR = 0x01 de "kick" gui
+  4. Poll NSR bit[2] cho den khi = 1 (gui xong)
+RX :
+  1. ENET_INT = 1 --> co goi moi
+  2. Doc status word tu DATA port
+  3. Doc length word tu DATA port
+  4. Doc tung word 16-bit du lieu tu DATA port
+  5. Ghi ISR = 0xFF de xoa interrupt
+
+7. Gửi gói tin (file rgb565_sender.py)
+- Check image luôn 640x480 nếu khác thì scale fill vị trí tróng bằng màu nền
+- Convert ảnh RGB sang RGB565
+- Tạo header nhận diện ảnh thêm 6 bytes: magic(2) + crc32(4)
+- Payload gửi đi header + payload(image)
+
+
+
+
+

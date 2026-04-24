@@ -1,0 +1,199 @@
+`timescale 1ns/1ps
+/*
+ *
+ * This block drives the DE2 Ethernet pins:
+ *   ENET_DATA[15:0], ENET_CMD, ENET_CS_N, ENET_RD_N, ENET_WR_N, ENET_RST_N
+ *
+ * Supported operations:
+ *   00 = register write
+ *   01 = register read
+ *   10 = data-port 16-bit write
+ *   11 = data-port 16-bit read
+ *
+ * Notes:
+ * - DM9000A has two ports selected by ENET_CMD:
+ *     CMD=0 -> INDEX port
+ *     CMD=1 -> DATA port
+ * - To read/write a register:
+ *     write register address to INDEX port,
+ *     then access the DATA port.
+ */
+
+module dm9000_bus_if (
+    input  wire        clk,
+    input  wire        rst_n,
+
+    input  wire        req_valid,
+    output reg         req_ready,
+    input  wire [1:0]  req_cmd,
+    input  wire [7:0]  req_reg_addr,
+    input  wire [15:0] req_wdata,
+
+    output reg  [15:0] rsp_rdata,
+    output reg         rsp_valid,
+
+    inout  wire [15:0] ENET_DATA,
+    output reg         ENET_CMD,
+    output reg         ENET_CS_N,
+    output reg         ENET_RD_N,
+    output reg         ENET_WR_N,
+    output reg         ENET_RST_N,
+    input  wire        ENET_INT
+);
+
+    localparam CMD_REG_WRITE = 2'b00;
+    localparam CMD_REG_READ  = 2'b01;
+    localparam CMD_DATA_W16  = 2'b10;
+    localparam CMD_DATA_R16  = 2'b11;
+
+    localparam S_RESET_HOLD  = 4'd0;
+    localparam S_RESET_REL   = 4'd1;
+    localparam S_IDLE        = 4'd2;
+    localparam S_IDX_SETUP   = 4'd3;
+    localparam S_IDX_PULSE   = 4'd4;
+    localparam S_DATA_SETUP  = 4'd5;
+    localparam S_DATA_WRITE  = 4'd6;
+    localparam S_DATA_READ   = 4'd7;
+    localparam S_DONE        = 4'd8;
+
+    reg [3:0] state;
+    reg [15:0] reset_cnt;
+    reg [1:0]  cmd_latched;
+    reg [7:0]  reg_latched;
+    reg [15:0] wdata_latched;
+    reg        data_oe;
+    reg [15:0] data_out;
+
+    wire [15:0] data_in;
+    assign data_in = ENET_DATA;
+    assign ENET_DATA = data_oe ? data_out : 16'hZZZZ;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            state         <= S_RESET_HOLD;
+            reset_cnt     <= 16'd0;
+            cmd_latched   <= 2'b00;
+            reg_latched   <= 8'd0;
+            wdata_latched <= 16'd0;
+
+            req_ready     <= 1'b0;
+            rsp_rdata     <= 16'd0;
+            rsp_valid     <= 1'b0;
+
+            data_oe       <= 1'b0;
+            data_out      <= 16'd0;
+
+            ENET_CMD      <= 1'b0;
+            ENET_CS_N     <= 1'b1;
+            ENET_RD_N     <= 1'b1;
+            ENET_WR_N     <= 1'b1;
+            ENET_RST_N    <= 1'b0;
+        end else begin
+            rsp_valid <= 1'b0;
+
+            case (state)
+                S_RESET_HOLD: begin
+                    ENET_RST_N <= 1'b0;
+                    ENET_CS_N  <= 1'b1;
+                    ENET_RD_N  <= 1'b1;
+                    ENET_WR_N  <= 1'b1;
+                    ENET_CMD   <= 1'b0;
+                    data_oe    <= 1'b0;
+                    req_ready  <= 1'b0;
+
+                    if (reset_cnt == 16'd50000) begin
+                        reset_cnt <= 16'd0;
+                        state     <= S_RESET_REL;
+                    end else begin
+                        reset_cnt <= reset_cnt + 16'd1;
+                    end
+                end
+
+                S_RESET_REL: begin
+                    ENET_RST_N <= 1'b1;
+                    req_ready  <= 1'b1;
+                    state      <= S_IDLE;
+                end
+
+                S_IDLE: begin
+                    ENET_CS_N <= 1'b1;
+                    ENET_RD_N <= 1'b1;
+                    ENET_WR_N <= 1'b1;
+                    data_oe   <= 1'b0;
+                    req_ready <= 1'b1;
+
+                    if (req_valid) begin
+                        req_ready     <= 1'b0;
+                        cmd_latched   <= req_cmd;
+                        reg_latched   <= req_reg_addr;
+                        wdata_latched <= req_wdata;
+
+                        if (req_cmd == CMD_DATA_W16 || req_cmd == CMD_DATA_R16)
+                            state <= S_DATA_SETUP;
+                        else
+                            state <= S_IDX_SETUP;
+                    end
+                end
+
+                S_IDX_SETUP: begin
+                    ENET_CMD  <= 1'b0;              // INDEX port
+                    ENET_CS_N <= 1'b0;
+                    ENET_RD_N <= 1'b1;
+                    ENET_WR_N <= 1'b1;
+                    data_oe   <= 1'b1;
+                    data_out  <= {8'h00, reg_latched};
+                    state     <= S_IDX_PULSE;
+                end
+
+                S_IDX_PULSE: begin
+                    ENET_WR_N <= 1'b0;
+                    state     <= S_DATA_SETUP;
+                end
+
+                S_DATA_SETUP: begin
+                    ENET_CS_N <= 1'b1;
+                    ENET_WR_N <= 1'b1;
+                    ENET_RD_N <= 1'b1;
+                    data_oe   <= 1'b0;
+
+                    ENET_CMD  <= 1'b1;              // DATA port
+                    ENET_CS_N <= 1'b0;
+
+                    if (cmd_latched == CMD_REG_WRITE || cmd_latched == CMD_DATA_W16) begin
+                        data_oe   <= 1'b1;
+                        data_out  <= wdata_latched;
+                        state     <= S_DATA_WRITE;
+                    end else begin
+                        data_oe   <= 1'b0;
+                        state     <= S_DATA_READ;
+                    end
+                end
+
+                S_DATA_WRITE: begin
+                    ENET_WR_N <= 1'b0;
+                    state     <= S_DONE;
+                end
+
+                S_DATA_READ: begin
+                    ENET_RD_N   <= 1'b0;
+                    rsp_rdata   <= data_in;
+                    state       <= S_DONE;
+                end
+
+                S_DONE: begin
+                    ENET_CS_N  <= 1'b1;
+                    ENET_RD_N  <= 1'b1;
+                    ENET_WR_N  <= 1'b1;
+                    data_oe    <= 1'b0;
+                    rsp_valid  <= 1'b1;
+                    req_ready  <= 1'b1;
+                    state      <= S_IDLE;
+                end
+
+                default: begin
+                    state <= S_RESET_HOLD;
+                end
+            endcase
+        end
+    end
+endmodule
